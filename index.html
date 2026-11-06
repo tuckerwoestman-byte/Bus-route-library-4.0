@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%9A%8C%3C/text%3E%3C/svg%3E">
+<title>Transfer Route Library</title>
+<style>
+:root{--bg:#f6f6f3;--fg:#1c1c1a;--mu:#6b6b66;--bd:#d8d8d2;--ac:#0b6e4f;--wn:#a15c00;--cd:#fff;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#171716;--fg:#ececE8;--mu:#9b9b94;--bd:#333330;--ac:#4cc79a;--wn:#f0a43a;--cd:#1f1f1d;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#171716;--fg:#ececE8;--mu:#9b9b94;--bd:#333330;--ac:#4cc79a;--wn:#f0a43a;--cd:#1f1f1d;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 "Pretendard","Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif}
+main{max-width:760px;margin:0 auto;padding:16px}
+h1{font-size:21px;margin:0 0 4px}h2{font-size:16px;margin:22px 0 8px}
+.mu{color:var(--mu);font-size:13px}.w{color:var(--wn);font-size:14px}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;align-items:center}
+input,select,textarea,button{font:inherit;color:inherit;background:var(--cd);border:1px solid var(--bd);border-radius:6px;padding:8px 10px}
+input[type=text]{flex:1;min-width:130px}input[type=checkbox]{padding:0}
+textarea{width:100%;box-sizing:border-box;min-height:110px}
+button{cursor:pointer}button.p{background:var(--ac);border-color:var(--ac);color:#fff}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--ac);outline-offset:1px}
+.c{border:1px solid var(--bd);background:var(--cd);border-radius:8px;padding:10px 12px;margin-bottom:8px}
+.path{font-weight:600;overflow-wrap:anywhere}
+details{margin-top:14px}summary{cursor:pointer;font-weight:600}
+.li{display:flex;gap:8px;align-items:center;justify-content:space-between;border-bottom:1px solid var(--bd);padding:6px 0}
+.li span{overflow-wrap:anywhere}.li button{padding:3px 8px;font-size:13px}
+#msg{min-height:20px}
+</style></head><body><main>
+<h1>Transfer Route Library</h1>
+<div class="mu">Saved paths only. Times never decide a result, so check the schedule on the web before buying.</div>
+<div id="msg" class="mu"></div>
+
+<h2>Look up a trip</h2>
+<div class="row"><input type="text" id="o" list="pl" placeholder="From (terminal or area)"><input type="text" id="d" list="pl" placeholder="To (terminal or area)"></div>
+<div class="row"><select id="who"><option value="E">Elder</option><option value="S">Sister</option></select>
+<label id="sx" hidden><input type="checkbox" id="pair"> with another sister</label>
+<label id="sy" hidden><input type="checkbox" id="el"> with an elder</label>
+<label id="sz" hidden><input type="checkbox" id="nl"> no luggage</label></div>
+<datalist id="pl"></datalist>
+<div id="res"></div>
+
+<h2>Add or fix a route</h2>
+<div class="mu">One line per leg, like <b>군산시외버스터미널 to 유성시외버스정류소</b>. Bus is the default. Add subway, train or walk at the end of a line for those legs. Full names and short names both work.</div>
+<div class="row"><textarea id="np" style="min-height:70px" placeholder="군산시외버스터미널 to 유성시외버스정류소"></textarea></div>
+<div class="row"><input type="text" id="nn" placeholder="Note (optional)"><button class="p" id="sv">Save route</button></div>
+<div id="msg2" class="w" role="status"></div>
+
+<details><summary>Saved routes (<span id="cnt">0</span>)</summary><div id="lib"></div></details>
+<details><summary>Add many routes at once</summary>
+<p class="mu">Paste rows copied from your transfer sheet, or lines like <b>군산시외버스터미널 to 유성시외버스정류소</b>. For a route with several legs, keep its lines together and leave a blank line between routes. Routes already saved are skipped. A leg between two stations is saved as subway, so change it to train in the list if needed.</p>
+<textarea id="bulk" style="min-height:140px"></textarea>
+<div class="row"><button class="p" id="bk">Add all</button></div><div id="msg3" class="w" role="status"></div></details>
+<details><summary>Areas and place names</summary>
+<p class="mu">Area links were pre-filled from your route history. Treat them as unconfirmed and fix them here.</p>
+<div class="mu">Area = terminals it uses, one per line</div><textarea id="ta"></textarea>
+<div class="mu">Place = other names for it, one per line</div><textarea id="tl"></textarea>
+<div class="row"><button id="ss">Save areas and names</button></div></details>
+
+<details><summary>Back up and restore</summary>
+<p class="mu">Changes are saved in this browser on this device only. Export a backup file now and then, and use Import to move the library to another device or browser.</p>
+<div class="row"><button id="ex">Export backup</button><label class="mu">Import backup <input type="file" id="im" accept=".json,application/json"></label><button id="rs">Reset to starting library</button></div></details>
+<script>
+const $=s=>document.querySelector(s),esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const KEY='transferRouteLibrary.v1',DEFAULT={"routes": ["성남종합>이천", "성남종합>천안시외|arrival time not recorded", "성남종합>서산", "성남종합>전주고속", "성남종합>청주시외", "성남종합>공주", "성남종합>아산", "성남종합>유성시외", "성남종합>대전복합", "성남종합>제천", "성남종합>유성시외>논산", "대전복합>서산", "대전복합>천안시외>제천", "대전복합>전주고속>덕진정류장>익산시외|덕진정류장 transfer, no times", "대전복합>세종고속", "대전복합>성남종합", "대전복합>청주시외", "대전복합>전주시외", "대전복합>성남종합=매교역|subway from 야탑역: Yellow Line then Blue Line; 여주역 also written", "수원>전주시외", "수원>대전복합>군산", "수원>충주", "제천>수원", "공주>세종고속", "공주>수원", "김제>전주시외>청주시외", "전주시외>성남종합", "전주시외>충주|then 충주역 to 제천역 by train", "전주시외>평택시외", "전주시외>대전복합>서산", "전주시외>김제", "전주고속>서산", "전주고속>대전복합>공주", "전주고속>성남종합", "전주공용>정읍공용", "이천>청주시외", "천안시외>성남종합", "천안시외>수원", "서산>천안시외", "청주시외>성남종합", "청주시외>충주", "청주시외>천안시외", "청주시외>성남종합=기흥역|subway from 야탑역: Yellow Line", "평택>청주시외", "평택>천안시외", "평택>전주시외", "세종청사>평택시외", "익산시외>청주시외", "익산시외>덕진정류장>남원|second bus leaves from 전주고속", "군산>전주시외", "군산>세종고속", "군산>성남종합", "충주>대전복합>군산", "충주>유성시외", "아산>천안시외", "아산>충주", "정읍>전주시외>남원", "남원>전주시외", "남원>전주시외>평택시외", "유성시외>성남종합", "유성시외>서산", "유성복합>전주공용>정읍공용", "논산>유성복합>성남종합", "천안역#평택역", "천안역#수원역", "충주역#평택역", "충주역#제천역", "평택지제역#천안아산역", "야탑역=죽전역", "수지구청역=야탑역", "매교역=야탑역", "수지구청역=판교역", "죽전역=매교역", "죽전역=매탄권선역", "온양온천역=세류역", "천안역=온양온천역", "세류역=평택역", "평택역=수원역=죽전역|Blue Line then Yellow Line", "기흥역=수원역=평택역|Yellow Line then Blue Line", "온양온천역=아산역|Blue Line (1호선)", "천안아산역#정읍역", "평택역=매탄역|Yellow Line and Blue Line", "군산시외버스터미널>유성시외버스정류소", "수원역=평택역|Blue Line (1호선)", "제천>성남종합", "공주>천안시외", "천안시외>청주시외", "아산>성남종합", "천안시외>공주", "성남종합>전주고속~전주시외>정읍고속", "수원>공주", "전주시외>정읍고속", "세종고속>전주시외~덕진정류장>익산시외", "청주시외>공주", "평택시외>청주시외~청주역#제천역", "천안시외>전주시외~덕진정류장>익산시외", "평택시외>성남종합>전주고속", "제천>청주시외>평택시외", "세종고속>성남종합", "전주시외>세종고속", "평택시외>성남종합", "정읍시외>완산동간이정류소", "아산>성남종합~야탑역=이천|sheet says 이천 (이천역 on another row)", "유성시외>청주시외~청주역#제천역", "평택시외>천안시외>유성시외", "대전복합>성남종합~야탑역=기흥역", "청주시외>전주시외", "이천>수원", "충주>대전복합", "김제>군산", "서산>전주고속~전주시외>김제", "서산>성남종합", "판교역=수지구청역", "매교역=죽전역", "매탄권선역=죽전역", "야탑역=매탄권선역", "대전복합>아산", "야탑역=이천역", "남원>대전복합>아산", "평택시외>성남종합~야탑역=수원역", "이천>성남종합~야탑역=이천역", "성남종합>충주", "성남종합>군산", "대전복합>천안시외>평택시외", "이천>성남종합~야탑역=수원역", "천안시외>대전복합"], "areas": {"곡반정": ["수원역", "수원", "매탄권선역"], "공주": ["공주"], "군산": ["군산"], "김제": ["김제"], "남원": ["남원"], "논산": ["논산"], "대전": ["대전복합", "유성시외"], "대전1": ["대전복합", "유성시외"], "대전2": ["대전복합"], "덕진": ["전주고속", "전주시외"], "분당": ["성남종합", "판교역", "야탑역"], "상당": ["청주시외"], "서산": ["서산"], "세종": ["세종고속"], "수원": ["수원"], "수지": ["성남종합", "수지구청역", "죽전역"], "수지 Tech": ["성남종합"], "신갈": ["성남종합", "기흥역"], "신풍": ["수원", "매교역"], "아산": ["아산"], "오산": ["평택시외", "평택역"], "온양": ["아산"], "완산": ["전주시외"], "이천": ["이천", "이천역"], "익산": ["익산시외"], "전주": ["전주시외", "전주고속"], "정읍": ["정읍고속", "정읍시외", "정읍공용"], "제천": ["제천"], "천안": ["천안시외"], "청주": ["청주시외"], "충주": ["충주"], "평택": ["평택시외", "평택역"], "험프리즈": ["평택시외"], "흥덕": ["청주시외"]}, "aliases": {"공주": ["공주종합버스터미널"], "군산": ["군산시외터미널", "군산시외버스터미널"], "김제": ["김제종합버스터미널"], "남원": ["남원공용버스터미널"], "대전복합": ["대전복합터미널", "대전복합버스터미널"], "서산": ["서산공용", "서산공용버스터미널"], "성남종합": ["성남종합터미널", "성남버스터미널", "성남종합버스터미널"], "세종고속": ["세종고속시외버스터미널"], "수원": ["수원버스터미널"], "아산": ["아산시외버스터미널"], "야탑역": ["야탑"], "유성시외": ["유성복합", "유성버스터미널", "유성시외버스정류소"], "이천": ["이천종합터미널"], "익산시외": ["익산시외버스터미널"], "전주고속": ["전주고속버스터미널"], "전주시외": ["전주공용", "전주시외버스공용터미널"], "정읍고속": ["정읍고속버스터미널"], "정읍공용": ["정읍공용버스터미널"], "정읍시외": ["정읍시외버스터미널"], "제천": ["제천버스터미널"], "천안시외": ["천안시외버스터미널"], "청주시외": ["청주시외버스터미널"], "충주": ["충주공용버스터미널"], "평택시외": ["평택시외버스터미널"]}};
+let D=JSON.parse(JSON.stringify(DEFAULT)),EDIT=-1,LAST=[];
+try{const s=localStorage.getItem(KEY);if(s)D=JSON.parse(s)}catch(e){}
+const HUBS=['성남종합','대전복합','수원','평택시외','천안시외'];
+const SEP={'>':'bus','=':'subway','#':'train','~':'walk'};
+const ym=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')};
+const msg=t=>{$('#msg').textContent=t||'';$('#msg2').textContent=t||'';$('#msg3').textContent=t||''};
+const canon=n=>{n=n.trim();for(const k in D.aliases)if(k==n||D.aliases[k].includes(n))return k;return n};
+const parse=(s,i)=>{const[p,n='',u='']=s.split('|'),t=p.split(/([>=#~])/),pl=[],ty=[];t.forEach((x,j)=>j%2?ty.push(x):pl.push(canon(x)));return{s,i,p,n,u,pl,ty,bus:ty.filter(x=>x=='>').length,tr:ty.includes('#')}};
+const ends=x=>(D.areas[x.trim()]||[x.trim()]).map(canon);
+const pretty=(pl,ty)=>pl.map((x,i)=>x+(ty[i]?' ('+SEP[ty[i]]+') → ':'')).join('');
+function find(o,d){const A=D.routes.map(parse),O=ends(o),T=ends(d),out=[];
+A.forEach(r=>{if(O.includes(r.pl[0])&&T.includes(r.pl.at(-1)))out.push(r)});
+if(!out.length){const seen={};A.forEach(a=>{if(!O.includes(a.pl[0])||T.includes(a.pl.at(-1)))return;A.forEach(b=>{if(b.pl[0]==a.pl.at(-1)&&T.includes(b.pl.at(-1))){const pl=[...a.pl,...b.pl.slice(1)],ty=[...a.ty,...b.ty],s=pl.map((x,i)=>x+(ty[i]||'')).join('');if(!seen[s]){seen[s]=1;out.push({pl,ty,bus:a.bus+b.bus,tr:a.tr||b.tr,n:'Combined from two saved routes. Check the schedule on the web.',u:'',s,combo:1})}}})})}
+return out.sort((x,y)=>x.bus-y.bus||x.pl.length-y.pl.length||(y.u>x.u?1:y.u<x.u?-1:0))}
+function partial(o,d){const T=ends(d),O=ends(o);return D.routes.map(parse).filter(r=>O.includes(r.pl[0])&&HUBS.includes(r.pl.at(-1))&&!T.includes(r.pl.at(-1)))}
+const warn=(r,t)=>{const w=[];if(t.s){const alone=!(t.pair||t.el);if(alone&&r.bus>1)w.push('Sister alone with more than one bus.');if(r.tr&&!(t.pair||t.el||t.nl))w.push('Train needs two sisters, an elder, or no luggage.')}return w};
+function card(r,k,t){const w=warn(r,t);return `<div class="c"><div class="path">${esc(pretty(r.pl,r.ty))}</div><div class="mu">${r.bus} bus${r.bus==1?'':'es'}, ${r.pl.length-2<0?0:r.pl.length-2} transfer${r.pl.length-2==1?'':'s'}${r.u?', last used '+esc(r.u):''}</div>${r.n?`<div class="mu">${esc(r.n)}</div>`:''}${w.map(x=>`<div class="w">${x}</div>`).join('')}<div class="row" style="margin:6px 0 0"><button data-k="${k}" class="${r.combo?'p':''}">${r.combo?'Save this path':'Used this transfer'}</button></div></div>`}
+function run(){const o=$('#o').value,d=$('#d').value,S=$('#who').value=='S';['sx','sy','sz'].forEach(i=>$('#'+i).hidden=!S);
+if(!o.trim()||!d.trim()){$('#res').innerHTML='<p class="mu">Enter where the trip starts and ends. An area name works too.</p>';LAST=[];return}
+const t={s:S,pair:$('#pair').checked,el:$('#el').checked,nl:$('#nl').checked};LAST=find(o,d);
+if(LAST.length){$('#res').innerHTML=LAST.map((r,k)=>card(r,k,t)).join('');return}
+const p=partial(o,d);$('#res').innerHTML=`<div class="c"><b>No saved path for ${esc(o)} to ${esc(d)}.</b><div class="mu">Likely hubs: ${HUBS.join(', ')}. Check the schedule on the web, then add the route below.</div></div>`+(p.length?'<div class="mu">Saved paths from '+esc(o)+' to a hub (the last leg is not saved yet):</div>'+p.map(r=>`<div class="c"><div class="path">${esc(pretty(r.pl,r.ty))}</div></div>`).join(''):'')}
+function paint(){const A=[...new Set([...Object.keys(D.areas),...D.routes.flatMap(s=>parse(s).pl)])].sort();$('#pl').innerHTML=A.map(x=>`<option value="${esc(x)}">`).join('');
+$('#cnt').textContent=D.routes.length;$('#lib').innerHTML=D.routes.map((s,i)=>{const r=parse(s,i);return `<div class="li"><span>${esc(pretty(r.pl,r.ty))}${r.u?' <span class="mu">'+esc(r.u)+'</span>':''}</span><span><button data-e="${i}">Edit</button> <button data-x="${i}">Delete</button></span></div>`}).join('');
+if(document.activeElement!==$('#ta')&&document.activeElement!==$('#tl')){$('#ta').value=Object.entries(D.areas).map(([k,v])=>k+'='+v.join(',')).join('\n');$('#tl').value=Object.entries(D.aliases).map(([k,v])=>k+'='+v.join(',')).join('\n')}run()}
+const save=m=>{try{localStorage.setItem(KEY,JSON.stringify(D));msg(m||'Saved on this device.')}catch(e){msg('Could not save in this browser. Use Export to keep a copy.')}};
+const TW={subway:'=',train:'#',bus:'>',walk:'~'},RW={'>':'bus','=':'subway','#':'train','~':'walk'};
+const fromLines=t=>{t=t.trim();if(/[>=#~]/.test(t)&&!/\sto\s/i.test(t))return t;let prev=null,out='';for(const l of t.split('\n').map(x=>x.trim()).filter(Boolean)){const m=l.match(/^(.+?)\s+to\s+(.+?)(?:\s+(bus|subway|train|walk))?$/i);if(!m){msg('Each leg needs two places, like: 군산시외버스터미널 to 유성시외버스정류소');return''}if(prev!==null&&canon(m[1])!=canon(prev)){msg('Each line must start where the previous line ended: '+prev);return''}out+=(prev===null?m[1].trim():'')+TW[(m[3]||'bus').toLowerCase()]+m[2].trim();prev=m[2].trim()}if(!out){msg('Write each leg as: place to place');return''}return out};
+const toLines=p=>{const t=p.split(/([>=#~])/),L=[];for(let i=0;i+2<t.length;i+=2)L.push(t[i]+' to '+t[i+2]+(t[i+1]=='>'?'':' '+RW[t[i+1]]));return L.join('\n')};
+const mapOf=t=>{const m={};t.split('\n').forEach(l=>{const[k,v]=l.split('=');if(k&&v&&k.trim())m[k.trim()]=v.split(',').map(x=>x.trim()).filter(Boolean)});return m};
+['o','d','who','pair','el','nl'].forEach(i=>$('#'+i).addEventListener('input',run));
+$('#res').addEventListener('click',e=>{const k=e.target.dataset.k;if(k==null)return;const r=LAST[k];if(r.combo)D.routes.push(r.s+'||'+ym());else D.routes[r.i]=r.p+'|'+r.n+'|'+ym();save();paint()});
+$('#lib').addEventListener('click',e=>{const x=e.target.dataset;if(x.x!=null){if(confirm('Delete this route?')){D.routes.splice(+x.x,1);save();paint()}}if(x.e!=null){const[p,n]=D.routes[+x.e].split('|');$('#np').value=toLines(p);$('#nn').value=n||'';EDIT=+x.e;$('#np').focus()}});
+$('#sv').onclick=()=>{const p=fromLines($('#np').value);if(!p)return;const s=p+'|'+$('#nn').value.trim().replace(/\|/g,' ')+'|'+ym();if(EDIT>=0)D.routes[EDIT]=s;else D.routes.push(s);EDIT=-1;$('#np').value=$('#nn').value='';save();paint();$('details').open=true;$('#lib').lastElementChild.scrollIntoView({block:'nearest'})};
+
+$('#ss').onclick=()=>{D.areas=mapOf($('#ta').value);D.aliases=mapOf($('#tl').value);save();paint()};
+const key=p=>p.split('|')[0].split(/([>=#~])/).map((x,i)=>i%2?x:canon(x)).join('');
+const parseTSV=t=>{const rows=[];let r=[],c='',q=false;for(let i=0;i<t.length;i++){const ch=t[i];if(q){if(ch=='"'){if(t[i+1]=='"'){c+='"';i++}else q=false}else c+=ch}else if(ch=='"')q=true;else if(ch=='\t'){r.push(c);c=''}else if(ch=='\n'||ch=='\r'){if(ch=='\r'&&t[i+1]=='\n')i++;r.push(c);rows.push(r);r=[];c=''}else c+=ch}r.push(c);rows.push(r);return rows};
+$('#bk').onclick=()=>{const t=$('#bulk').value;if(!t.trim())return;const out=[];
+if(t.includes('\t')){parseTSV(t).forEach(c=>{const g=i=>(c[i]||'').trim(),leg=(a,b)=>{const x=a.replace(/^subway\s+/i,''),y=b.replace(/^subway\s+/i,'');return[x,(x!=a||y!=b||(/역$/.test(x)&&/역$/.test(y)))?'=':'>',y]};if(!g(6)||!g(9))return;const[a,t1,b]=leg(g(6),g(9));let p=a+t1+b;if(g(10).toLowerCase()=='y'&&g(11)&&g(14)){const[c2,t2,d]=leg(g(11),g(14));p+=(canon(b)==canon(c2)?'':'~'+c2)+t2+d}out.push(p)})}
+else t.split(/\n\s*\n/).forEach(bl=>{const L=bl.split('\n').map(x=>x.trim()).filter(Boolean);if(L.length&&L.every(l=>/\sto\s/i.test(l))){const p=fromLines(bl);if(p)out.push(p)}else L.forEach(l=>{if(/[>=#~]/.test(l))out.push(l)})});
+const have=new Set(D.routes.map(key));let n=0,dup=0;out.forEach(p=>{const k=key(p);if(have.has(k)){dup++;return}have.add(k);D.routes.push(p+'||'+ym());n++});
+$('#bulk').value='';save('Added '+n+' route'+(n==1?'':'s')+(dup?', skipped '+dup+' already saved':'')+'.');paint()};
+$('#ex').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(D,null,1)],{type:'application/json'}));a.download='route-library-'+ym()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);msg('Exported a backup file.')};
+$('#im').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const v=JSON.parse(r.result);if(!Array.isArray(v.routes))throw 0;if(!confirm('Replace the library on this device with the backup file?'))return;D={routes:v.routes,areas:v.areas||{},aliases:v.aliases||{}};save('Backup restored.');paint()}catch(x){msg('That file is not a route library backup.')}};r.readAsText(f);e.target.value=''};
+$('#rs').onclick=()=>{if(confirm('Reset to the starting library? Routes you added will be lost.')){D=JSON.parse(JSON.stringify(DEFAULT));save('Reset to the starting library.');paint()}};
+paint();
+</script></main></body></html>
